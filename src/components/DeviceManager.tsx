@@ -18,16 +18,19 @@ import {
   Building2,
   MapPin
 } from "lucide-react";
+import AddDeviceForm from "./AddDeviceForm";
 
 interface DeviceManagerProps {
   data: any;
+  onDataUpdate?: (updatedData: any) => void;
 }
 
-const DeviceManager = ({ data }: DeviceManagerProps) => {
+const DeviceManager = ({ data, onDataUpdate }: DeviceManagerProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDiscipline, setSelectedDiscipline] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedCustomer, setSelectedCustomer] = useState("all");
+  const [showAddDeviceForm, setShowAddDeviceForm] = useState(false);
 
   const getDisciplineIcon = (disciplineId: string) => {
     switch (disciplineId) {
@@ -70,6 +73,16 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
     return matchesSearch && matchesDiscipline && matchesStatus && matchesCustomer;
   });
 
+  const handleDeviceAdded = (newDevice: any) => {
+    if (onDataUpdate) {
+      const updatedData = {
+        ...data,
+        devices: [...data.devices, newDevice]
+      };
+      onDataUpdate(updatedData);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -78,7 +91,7 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
           <h2 className="text-2xl font-bold text-slate-800">Device Management</h2>
           <p className="text-slate-600">Manage your calibration devices and equipment</p>
         </div>
-        <Button>
+        <Button onClick={() => setShowAddDeviceForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Device
         </Button>
@@ -229,6 +242,15 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
             <p className="text-slate-600">No devices found matching your criteria</p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Add Device Form Modal */}
+      {showAddDeviceForm && (
+        <AddDeviceForm 
+          data={data}
+          onClose={() => setShowAddDeviceForm(false)}
+          onDeviceAdded={handleDeviceAdded}
+        />
       )}
     </div>
   );

@@ -148,6 +148,11 @@ const sampleData = {
 const Index = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [appData, setAppData] = useState(sampleData);
+
+  const handleDataUpdate = (updatedData: any) => {
+    setAppData(updatedData);
+  };
 
   const getDisciplineIcon = (disciplineId: string) => {
     switch (disciplineId) {
@@ -224,14 +229,14 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
-            <DashboardStats data={sampleData} />
+            <DashboardStats data={appData} />
             
             {/* Customer Overview */}
             <div>
               <h2 className="text-xl font-semibold mb-4 text-slate-800">Customer Overview</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sampleData.customers.map((customer) => {
-                  const customerDevices = sampleData.devices.filter(
+                {appData.customers.map((customer) => {
+                  const customerDevices = appData.devices.filter(
                     d => d.customer_id === customer.id
                   );
                   
@@ -259,11 +264,11 @@ const Index = () => {
             <div>
               <h2 className="text-xl font-semibold mb-4 text-slate-800">Disciplines</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sampleData.disciplines.map((discipline) => {
-                  const disciplineDeviceTypes = sampleData.deviceTypes.filter(
+                {appData.disciplines.map((discipline) => {
+                  const disciplineDeviceTypes = appData.deviceTypes.filter(
                     dt => dt.discipline_id === discipline.id
                   );
-                  const disciplineDevices = sampleData.devices.filter(
+                  const disciplineDevices = appData.devices.filter(
                     d => disciplineDeviceTypes.some(dt => dt.id === d.device_type_id)
                   );
                   
@@ -284,7 +289,7 @@ const Index = () => {
                             <div key={deviceType.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
                               <span className="text-sm font-medium">{deviceType.name}</span>
                               <Badge variant="outline" className="text-xs">
-                                {sampleData.devices.filter(d => d.device_type_id === deviceType.id).length} devices
+                                {appData.devices.filter(d => d.device_type_id === deviceType.id).length} devices
                               </Badge>
                             </div>
                           ))}
@@ -306,9 +311,9 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {sampleData.devices.map((device) => {
-                    const deviceType = sampleData.deviceTypes.find(dt => dt.id === device.device_type_id);
-                    const customer = sampleData.customers.find(c => c.id === device.customer_id);
+                  {appData.devices.map((device) => {
+                    const deviceType = appData.deviceTypes.find(dt => dt.id === device.device_type_id);
+                    const customer = appData.customers.find(c => c.id === device.customer_id);
                     return (
                       <div key={device.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
                         <div>
@@ -341,12 +346,12 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="devices">
-            <DeviceManager data={sampleData} />
+            <DeviceManager data={appData} onDataUpdate={handleDataUpdate} />
           </TabsContent>
 
           <TabsContent value="calibrate">
             <CalibrationWorkflow 
-              data={sampleData} 
+              data={appData} 
               selectedDevice={selectedDevice}
               onDeviceSelect={setSelectedDevice}
             />
