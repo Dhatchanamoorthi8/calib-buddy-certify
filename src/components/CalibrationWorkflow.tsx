@@ -15,7 +15,9 @@ import {
   ArrowRight,
   Download,
   AlertTriangle,
-  Target
+  Target,
+  Building2,
+  MapPin
 } from "lucide-react";
 
 interface CalibrationWorkflowProps {
@@ -26,8 +28,8 @@ interface CalibrationWorkflowProps {
 
 const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: CalibrationWorkflowProps) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [observations, setObservations] = useState<{ [key: number]: number }>({});
-  const [results, setResults] = useState<{ [key: number]: { pass: boolean; error: number } }>({});
+  const [observations, setObservations] = useState<{ [key: number]: any }>({});
+  const [results, setResults] = useState<{ [key: number]: { pass: boolean; error?: number } }>({});
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const { toast } = useToast();
 
@@ -47,9 +49,20 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
     // Auto-calculate results when observations change
     const currentParam = deviceParameters[currentStep];
     if (currentParam && observations[currentStep] !== undefined) {
-      const observedValue = observations[currentStep];
-      const error = observedValue - currentParam.std_input_value;
-      const pass = error >= currentParam.tolerance_minus && error <= currentParam.tolerance_plus;
+      let pass = false;
+      let error = undefined;
+
+      if (currentParam.tolerance_type === "go-nogo") {
+        // Go/No-Go logic
+        pass = observations[currentStep] === currentParam.expected_result;
+      } else if (currentParam.tolerance_type === "range") {
+        // Range-based logic
+        const observedValue = parseFloat(observations[currentStep]);
+        if (!isNaN(observedValue)) {
+          error = observedValue - currentParam.std_input_value;
+          pass = error >= currentParam.tolerance_minus && error <= currentParam.tolerance_plus;
+        }
+      }
       
       setResults(prev => ({
         ...prev,
@@ -58,17 +71,8 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
     }
   }, [observations, currentStep, deviceParameters]);
 
-  const handleObservationChange = (stepNo: number, value: string) => {
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      setObservations(prev => ({ ...prev, [stepNo]: numValue }));
-    } else {
-      setObservations(prev => {
-        const newObs = { ...prev };
-        delete newObs[stepNo];
-        return newObs;
-      });
-    }
+  const handleObservationChange = (stepNo: number, value: any) => {
+    setObservations(prev => ({ ...prev, [stepNo]: value }));
   };
 
   const nextStep = () => {
@@ -93,11 +97,27 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
 
   const generateCertificate = () => {
     const deviceType = data.deviceTypes.find((dt: any) => dt.id === selectedDevice.device_type_id);
+    const customer = data.customers.find((c: any) => c.id === selectedDevice.customer_id);
     const allPassed = Object.values(results).every(r => r.pass);
+    
+    // Generate certificate number
+    const certNumber = `CAL-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+    
+    console.log('Generating certificate with data:', {
+      certNumber,
+      customer,
+      device: selectedDevice,
+      deviceType,
+      observations,
+      results,
+      calibrationDate: new Date().toISOString().split('T')[0],
+      nextDueDate: selectedDevice.next_due_date,
+      status: allPassed ? 'PASSED' : 'FAILED'
+    });
     
     toast({
       title: "Certificate Generated! 📄",
-      description: `Calibration certificate for ${selectedDevice.model} has been created.`,
+      description: `Certificate ${certNumber} for ${selectedDevice.model} has been created and is ready for download.`,
     });
   };
 
@@ -118,6 +138,7 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {data.devices.map((device: any) => {
                 const deviceType = data.deviceTypes.find((dt: any) => dt.id === device.device_type_id);
+                const customer = data.customers.find((c: any) => c.id === device.customer_id);
                 return (
                   <Card 
                     key={device.id} 
@@ -126,7 +147,17 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
                   >
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg">{device.model}</CardTitle>
-                      <CardDescription>{deviceType?.name} • S/N: {device.serial_no}</CardDescription>
+                      <CardDescription className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span>{deviceType?.name}</span>
+                          <span>•</span>
+                          <span>S/N: {device.serial_no}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-xs">
+                          <Building2 className="h-3 w-3" />
+                          <span>{customer?.name}</span>
+                        </div>
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-between">
@@ -145,6 +176,7 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
   }
 
   const deviceType = data.deviceTypes.find((dt: any) => dt.id === selectedDevice.device_type_id);
+  const customer = data.customers.find((c: any) => c.id === selectedDevice.customer_id);
   const currentParam = deviceParameters[currentStep];
   const progress = ((currentStep + (calibrationComplete ? 1 : 0)) / deviceParameters.length) * 100;
   const allPassed = Object.values(results).every(r => r.pass);
@@ -155,7 +187,19 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Calibrating: {selectedDevice.model}</h2>
-          <p className="text-slate-600">{deviceType?.name} • S/N: {selectedDevice.serial_no}</p>
+          <div className="space-y-1">
+            <p className="text-slate-600">{deviceType?.name} • S/N: {selectedDevice.serial_no}</p>
+            <div className="flex items-center space-x-4 text-sm text-slate-500">
+              <div className="flex items-center space-x-1">
+                <Building2 className="h-3 w-3" />
+                <span>{customer?.name}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <MapPin className="h-3 w-3" />
+                <span>{selectedDevice.location}</span>
+              </div>
+            </div>
+          </div>
         </div>
         <Button variant="outline" onClick={() => onDeviceSelect(null)}>
           <Settings className="h-4 w-4 mr-2" />
@@ -189,54 +233,90 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
               <span>Step {currentStep + 1}: {currentParam?.description}</span>
             </CardTitle>
             <CardDescription>
-              Enter the observed reading for this calibration point
+              {currentParam?.tolerance_type === "go-nogo" 
+                ? "Select the observed result for this Go/No-Go check"
+                : "Enter the observed reading for this calibration point"
+              }
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Standard Input Value</label>
-                <div className="p-3 bg-blue-50 rounded-lg border">
-                  <span className="text-lg font-bold text-blue-800">
-                    {currentParam?.std_input_value} {currentParam?.unit}
-                  </span>
+            {currentParam?.tolerance_type === "go-nogo" ? (
+              /* Go/No-Go Interface */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Expected Result</label>
+                  <div className="p-3 bg-blue-50 rounded-lg border">
+                    <span className="text-lg font-bold text-blue-800">
+                      {currentParam.expected_result}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Observed Result *</label>
+                  <Select
+                    value={observations[currentStep] || ""}
+                    onValueChange={(value) => handleObservationChange(currentStep, value)}
+                  >
+                    <SelectTrigger className="text-lg">
+                      <SelectValue placeholder="Select result" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Go">Go</SelectItem>
+                      <SelectItem value="No-Go">No-Go</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Observed Reading *</label>
-                <Input
-                  type="number"
-                  step="0.001"
-                  placeholder={`Enter reading in ${currentParam?.unit}`}
-                  value={observations[currentStep] || ""}
-                  onChange={(e) => handleObservationChange(currentStep, e.target.value)}
-                  className="text-lg"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Tolerance Range</label>
-                <div className="p-3 bg-slate-50 rounded-lg border">
-                  <span className="text-sm">
-                    {(currentParam?.std_input_value + currentParam?.tolerance_minus).toFixed(3)} to{' '}
-                    {(currentParam?.std_input_value + currentParam?.tolerance_plus).toFixed(3)} {currentParam?.unit}
-                  </span>
+            ) : (
+              /* Range-based Interface */
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Standard Input Value</label>
+                  <div className="p-3 bg-blue-50 rounded-lg border">
+                    <span className="text-lg font-bold text-blue-800">
+                      {currentParam?.std_input_value} {currentParam?.unit}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Observed Reading *</label>
+                  <Input
+                    type="number"
+                    step="0.001"
+                    placeholder={`Enter reading in ${currentParam?.unit}`}
+                    value={observations[currentStep] || ""}
+                    onChange={(e) => handleObservationChange(currentStep, e.target.value)}
+                    className="text-lg"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Tolerance Range</label>
+                  <div className="p-3 bg-slate-50 rounded-lg border">
+                    <span className="text-sm">
+                      {(currentParam?.std_input_value + currentParam?.tolerance_minus).toFixed(3)} to{' '}
+                      {(currentParam?.std_input_value + currentParam?.tolerance_plus).toFixed(3)} {currentParam?.unit}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {results[currentStep] && (
               <div className="border-t pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Error</label>
-                    <div className="p-3 bg-slate-50 rounded-lg">
-                      <span className={`font-bold ${results[currentStep].error > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {results[currentStep].error > 0 ? '+' : ''}{results[currentStep].error.toFixed(3)} {currentParam?.unit}
-                      </span>
+                  {currentParam?.tolerance_type === "range" && results[currentStep].error !== undefined && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Error</label>
+                      <div className="p-3 bg-slate-50 rounded-lg">
+                        <span className={`font-bold ${results[currentStep].error! > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {results[currentStep].error! > 0 ? '+' : ''}{results[currentStep].error!.toFixed(3)} {currentParam?.unit}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-700">Result</label>
@@ -286,13 +366,14 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
                 <span>Calibration Results</span>
               </CardTitle>
               <CardDescription>
-                Summary of all calibration measurements
+                Summary of all calibration measurements for {customer?.name}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {deviceParameters.map((param: any, index: number) => {
                   const result = results[index];
+                  const observation = observations[index];
                   return (
                     <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border rounded-lg">
                       <div>
@@ -300,19 +381,33 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
                         <p className="font-medium">{param.description}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-slate-600">Standard</p>
-                        <p className="font-medium">{param.std_input_value} {param.unit}</p>
+                        <p className="text-sm text-slate-600">
+                          {param.tolerance_type === "go-nogo" ? "Expected" : "Standard"}
+                        </p>
+                        <p className="font-medium">
+                          {param.tolerance_type === "go-nogo" 
+                            ? param.expected_result 
+                            : `${param.std_input_value} ${param.unit}`
+                          }
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm text-slate-600">Observed</p>
-                        <p className="font-medium">{observations[index]} {param.unit}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-600">Error</p>
-                        <p className={`font-medium ${result?.error > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {result?.error > 0 ? '+' : ''}{result?.error.toFixed(3)} {param.unit}
+                        <p className="font-medium">
+                          {param.tolerance_type === "go-nogo" 
+                            ? observation 
+                            : `${observation} ${param.unit}`
+                          }
                         </p>
                       </div>
+                      {param.tolerance_type === "range" && (
+                        <div>
+                          <p className="text-sm text-slate-600">Error</p>
+                          <p className={`font-medium ${result?.error! > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {result?.error! > 0 ? '+' : ''}{result?.error!.toFixed(3)} {param.unit}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         {result?.pass ? (
                           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
@@ -393,7 +488,10 @@ const CalibrationWorkflow = ({ data, selectedDevice, onDeviceSelect }: Calibrati
                     <div>
                       <p className="font-medium">Step {index + 1}: {param.description}</p>
                       <p className="text-sm text-slate-600">
-                        Standard: {param.std_input_value} {param.unit}
+                        {param.tolerance_type === "go-nogo" 
+                          ? `Expected: ${param.expected_result}`
+                          : `Standard: ${param.std_input_value} ${param.unit}`
+                        }
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">

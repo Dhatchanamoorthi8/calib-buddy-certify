@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   Calendar,
   Wrench,
-  Zap
+  Zap,
+  Building2,
+  MapPin
 } from "lucide-react";
 
 interface DeviceManagerProps {
@@ -25,6 +27,7 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDiscipline, setSelectedDiscipline] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedCustomer, setSelectedCustomer] = useState("all");
 
   const getDisciplineIcon = (disciplineId: string) => {
     switch (disciplineId) {
@@ -52,17 +55,19 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
 
   const filteredDevices = data.devices.filter((device: any) => {
     const deviceType = data.deviceTypes.find((dt: any) => dt.id === device.device_type_id);
-    const discipline = data.disciplines.find((d: any) => d.id === deviceType?.discipline_id);
+    const customer = data.customers.find((c: any) => c.id === device.customer_id);
     
     const matchesSearch = 
       device.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       device.serial_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      deviceType?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      deviceType?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer?.name.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesDiscipline = selectedDiscipline === "all" || deviceType?.discipline_id === selectedDiscipline;
     const matchesStatus = selectedStatus === "all" || device.status === selectedStatus;
+    const matchesCustomer = selectedCustomer === "all" || device.customer_id === selectedCustomer;
     
-    return matchesSearch && matchesDiscipline && matchesStatus;
+    return matchesSearch && matchesDiscipline && matchesStatus && matchesCustomer;
   });
 
   return (
@@ -88,7 +93,7 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Search</label>
               <div className="relative">
@@ -100,6 +105,22 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
                   className="pl-10"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Customer</label>
+              <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  {data.customers.map((customer: any) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Discipline</label>
@@ -140,18 +161,28 @@ const DeviceManager = ({ data }: DeviceManagerProps) => {
         {filteredDevices.map((device: any) => {
           const deviceType = data.deviceTypes.find((dt: any) => dt.id === device.device_type_id);
           const discipline = data.disciplines.find((d: any) => d.id === deviceType?.discipline_id);
+          const customer = data.customers.find((c: any) => c.id === device.customer_id);
           
           return (
             <Card key={device.id} className="hover:shadow-lg transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <CardTitle className="text-lg">{device.model}</CardTitle>
-                    <CardDescription className="flex items-center space-x-2">
-                      {getDisciplineIcon(discipline?.id)}
-                      <span>{deviceType?.name}</span>
-                      <span>•</span>
-                      <span>S/N: {device.serial_no}</span>
+                    <CardDescription className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        {getDisciplineIcon(discipline?.id)}
+                        <span>{deviceType?.name}</span>
+                        <span>•</span>
+                        <span>S/N: {device.serial_no}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-xs">
+                        <Building2 className="h-3 w-3" />
+                        <span>{customer?.name}</span>
+                        <span>•</span>
+                        <MapPin className="h-3 w-3" />
+                        <span>{device.location}</span>
+                      </div>
                     </CardDescription>
                   </div>
                   {getStatusBadge(device.status)}
